@@ -1,0 +1,28 @@
+# --- 数据文件 (绝对不能上传) ---
+tcdata/
+tcdata/*.csv
+*.csv
+
+# --- 中间缓存文件 (模型、pkl等) ---
+user_data/
+user_data/**/*.pkl
+user_data/**/*.pth
+*.pkl
+*.pkl.*
+
+# --- 输出结果 ---
+prediction_result/
+result.csv
+
+# --- Python 编译与环境文件 ---
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+.idea/
+.vscode/
+
+# --- 系统文件 ---
+.DS_Store
+Thumbs.db
