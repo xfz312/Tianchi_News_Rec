@@ -68,5 +68,14 @@ python code/main.py
 · 为测试集用户生成 Top-5 推荐。
 · 在 prediction_result/ 下生成 result.csv。`
 
-## 📊 实验结果 (Results)
-ItemCF (Baseline) + Log-weighted : 0.1026
+## 📊 实验结果 (Experiments & Results)
+
+| Version | Method | Strategies | Score (Online) | Improvement |
+| :--- | :--- | :--- | :--- | :--- |
+| **v1.0** | ItemCF (Baseline) | Basic Co-occurrence | 0.1026  | - |
+| **v1.1** | **ItemCF (Optimized)** | **+ IUF (Inverse User Freq)**<br>**+ Position Weight**<br>**+ Time Decay** | **0.1503** | **+40% 🚀** |
+
+> **Note**: 
+> * **IUF**: 降低活跃用户对相似度的贡献，减少噪音。
+> * **Position Weight**: 序列中距离越近的文章，权重越高 (0.9^distance)。
+> * **Time Decay**: 优先推荐用户近期感兴趣的内容。
