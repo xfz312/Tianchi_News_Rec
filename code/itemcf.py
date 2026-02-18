@@ -6,40 +6,41 @@ from collections import defaultdict
 
 def itemcf_sim(user_item_time_dict):
     """
-    计算物品相似度矩阵
-    :param user_item_time_dict: {user_id:[(item_id,time),...]}
-    :return: i2i_sim : {item_i:{item_j,score,...}}
+    计算物品相似度矩阵 (修正版)
     """
-    #---1.初始化 ---
-    #i2i_sim[i][j] 存物品i，j的相似度
     i2i_sim = {}
-    #item_cnt[i] 统计物品i被多少用户点击过（分母）
     item_cnt = defaultdict(int)
 
-    print(">>> Calculating Item-Item Similarity Matrix...")
+    print(">>> Calculating Item-Item Similarity Matrix (Improved)...")
 
-    # --- 2. 遍历每个用户的历史行为，构建共现矩阵 ---
-    # tqdm 是进度条，因为数据量大，不加这个你会以为程序死机了
-    for user,item_time_list in tqdm(user_item_time_dict.items()):
-
-        #遍历用户看过的每一个物品i
-        for i,_ in item_time_list:
-            item_cnt[i]+=1
-            i2i_sim.setdefault(i,{})
-
-            # 再次遍历用户看过的每一个物品 j (计算 i 和 j 的关系)
-            for j,_ in item_time_list:
+    for user, item_time_list in tqdm(user_item_time_dict.items()):
+        
+        # 1. IUF 权重
+        iuf_weight = 1.0 / math.log(1 + len(item_time_list))
+        
+        for loc1, (i, i_click_time) in enumerate(item_time_list):
+            item_cnt[i] += 1
+            i2i_sim.setdefault(i, {})
+            
+            for loc2, (j, j_click_time) in enumerate(item_time_list):
                 if i == j:
                     continue
-                i2i_sim[i].setdefault(j,0)
-                weight = 1 / math.log(len(item_time_list) + 1)
-                i2i_sim[i][j] += weight
+                
+                # 2. 位置权重
+                loc_alpha = 1.0 if loc2 > loc1 else 0.7
+                
+                # 【!!! 修正点 !!!】这里必须是 ** (次方)，绝对不能是 * (乘法)
+                loc_weight = loc_alpha * (0.9 ** (abs(loc1 - loc2) - 1))
+                
+                i2i_sim[i].setdefault(j, 0)
+                i2i_sim[i][j] += iuf_weight * loc_weight
             
-    # --- 3. 归一化 (计算最终相似度) ---
+    # 3. 归一化
     print(">>> Normalizing...")
-    for i,related_items in i2i_sim.items():
-        for j,wij in related_items.items():
-            i2i_sim[i][j] = wij/math.sqrt(item_cnt[i]*item_cnt[j])
+    for i, related_items in i2i_sim.items():
+        for j, wij in related_items.items():
+            i2i_sim[i][j] = wij / math.sqrt(item_cnt[i] * item_cnt[j])
+            
     return i2i_sim
 
 def item_based_recommend(user_id,user_item_time_dict,i2i_sim,sim_item_topk,recall_item_num,item_topk_click):
@@ -56,16 +57,22 @@ def item_based_recommend(user_id,user_item_time_dict,i2i_sim,sim_item_topk,recal
     user_hist_set = {item for item,_ in user_hist_items}
     item_rank = {}
 
-    #2.遍历用户看过的每个物品i
-    for i,click_time in user_hist_items:
-        #从相似度矩阵拿出和i最相似的前k个物品：
-        #sorted从大到小排序
-        for j,wij in sorted(i2i_sim.get(i,{}).items(),key = lambda x : x[1],reverse=True)[:sim_item_topk]:
+    # 2. 遍历用户看过的每个物品 i
+    # 【优化】考虑用户最近的行为权重更高
+    # 我们用 list 的索引来代表时间远近，loc 越大代表越近
+    hist_len = len(user_hist_items)
+    for loc,(i,click_time) in enumerate(user_hist_items):
+        # 【新增】近期行为权重 (Time Decay)
+        # 越接近当前(loc 越大)，权重越大。
+        # 0.9 ** (hist_len - 1 - loc)
+        # 例如：总长5。第4个(最新): 0.9^0=1。第0个(最旧): 0.9^4=0.65
+        time_decay = 0.9 ** (hist_len - loc - 1)
+        for j,wij in sorted(i2i_sim.get(i,{}).items(),key = lambda x : x[1],reverse= True)[:sim_item_topk]:
             if j in user_hist_set:
                 continue
             #计算推荐分数
             item_rank.setdefault(j,0)
-            item_rank[j] += wij
+            item_rank[j] += wij * time_decay
         
     #3.热门补全
     if len(item_rank) < recall_item_num:
